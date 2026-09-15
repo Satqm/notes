@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Audit Notes Flashcards</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-main: #2d3748;
+            --accent-blue: #3182ce;
+            --highlight-red: #e53e3e;
+            --border-color: #e2e8f0;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body { background-color: var(--bg-color); color: var(--text-main); overflow-x: hidden; }
+
+        /* Header */
+        header {
+            background-color: var(--card-bg);
+            padding: 15px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .menu-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--accent-blue); }
+        .header-title { font-weight: 700; font-size: 1.1rem; }
+
+        /* Sidebar Navigation */
+        #sidebar {
+            position: fixed;
+            top: 0;
+            left: -300px;
+            width: 280px;
+            height: 100vh;
+            background-color: var(--card-bg);
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            transition: left 0.3s ease;
+            z-index: 200;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        #sidebar.open { left: 0; }
+        
+        .close-btn { text-align: right; margin-bottom: 20px; }
+        .close-btn button { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; }
+        
+        .nav-chapter { font-weight: bold; margin-top: 15px; margin-bottom: 5px; color: var(--accent-blue); font-size: 0.95rem; }
+        .nav-topic { 
+            padding: 8px 10px; 
+            margin-bottom: 5px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .nav-topic:hover { background-color: #edf2f7; }
+        .nav-topic.active { background-color: var(--accent-blue); color: white; }
+
+        /* Overlay */
+        #overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.4); z-index: 150;
+        }
+
+        /* Main Content area (Flashcard) */
+        main { padding: 20px; max-width: 800px; margin: 0 auto; min-height: 85vh; }
+        
+        #flashcard {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            min-height: 60vh;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        
+        .topic-title { color: var(--accent-blue); margin-bottom: 20px; font-size: 1.4rem; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        
+        .content-line { margin-bottom: 12px; line-height: 1.6; font-size: 1.05rem; }
+        .content-bullet { margin-bottom: 10px; line-height: 1.6; font-size: 1.05rem; padding-left: 20px; position: relative; }
+        .content-bullet::before { content: "•"; position: absolute; left: 5px; color: var(--accent-blue); }
+        
+        /* Auto-Highlighter Class */
+        .highlight-red { color: var(--highlight-red); font-weight: 600; background-color: #fff5f5; padding: 0 4px; border-radius: 3px; }
+        
+        /* Progress & Swipe indicators */
+        .controls { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; color: #718096; font-size: 0.9rem; }
+        .swipe-hint { text-align: center; margin-top: 30px; color: #a0aec0; font-size: 0.85rem; font-style: italic; }
+
+        /* Swipe Animations */
+        .swipe-left-out { transform: translateX(-100px); opacity: 0; }
+        .swipe-right-out { transform: translateX(100px); opacity: 0; }
+        .swipe-left-in { animation: slideInRight 0.3s forwards; }
+        .swipe-right-in { animation: slideInLeft 0.3s forwards; }
+        
+        @keyframes slideInRight { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideInLeft { from { transform: translateX(-100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <header>
+        <button class="menu-btn" onclick="toggleMenu()">☰</button>
+        <div class="header-title">Audit Notes Revise</div>
+        <div style="width: 24px;"></div> <!-- Spacer for flex alignment -->
+    </header>
+
+    <div id="overlay" onclick="toggleMenu()"></div>
+
+    <nav id="sidebar">
+        <div class="close-btn"><button onclick="toggleMenu()">✕</button></div>
+        <div id="nav-content">Loading index...</div>
+    </nav>
+
+    <main id="swipe-zone">
+        <div id="flashcard">
+            <h2 id="topic-title" class="topic-title">Loading...</h2>
+            <div id="topic-content"></div>
+        </div>
+        <div class="controls">
+            <span id="prev-btn">← Prev</span>
+            <span id="progress-indicator">0 / 0</span>
+            <span id="next-btn">Next →</span>
+        </div>
+        <div class="swipe-hint">Swipe left or right to navigate topics</div>
+    </main>
+
+    <script>
+        let auditData = [];
+        let currentChapIdx = 0;
+        let currentTopicIdx = 0;
+
+        // HIGH-YIELD KEYWORDS FOR AUTO-HIGHLIGHTING (Customize this list for May 2027 prep)
+        const keywordsToHighlight = [
+            "Reasonable Assurance", "Material Misstatement", "Audit Risk", 
+            "Sufficient & Appropriate", "SAAE", "Inherent Risk", "Control Risk", 
+            "Detection Risk", "Fraud", "Error", "TCWG", "AFRF"
+        ];
+
+        // 1. Fetch Data
+        async function loadData() {
+            try {
+                const response = await fetch('audit_notes_ocr_parsed.json');
+                const data = await response.json();
+                auditData = data.chapters;
+                buildNavigation();
+                loadTopic(0, 0, 'none');
+            } catch (error) {
+                document.getElementById('topic-title').innerText = "Error Loading Data";
+                document.getElementById('topic-content').innerHTML = "<p>Could not load JSON. Are you running this on a local server?</p>";
+                console.error(error);
+            }
+        }
+
+        // 2. Apply Custom Highlights
+        function autoHighlight(htmlString) {
+            let processedHtml = htmlString;
+            keywordsToHighlight.forEach(keyword => {
+                // Regex for exact word match, case insensitive
+                const regex = new RegExp(`\\b(${keyword})\\b`, 'gi');
+                processedHtml = processedHtml.replace(regex, `<span class='highlight-red'>$1</span>`);
+            });
+            return processedHtml;
+        }
+
+        // 3. Render Content
+        function loadTopic(cIdx, tIdx, animationDir = 'none') {
+            if (cIdx < 0 || cIdx >= auditData.length) return;
+            if (tIdx < 0 || tIdx >= auditData[cIdx].topics.length) return;
+
+            currentChapIdx = cIdx;
+            currentTopicIdx = tIdx;
+            
+            const topic = auditData[cIdx].topics[tIdx];
+            const card = document.getElementById('flashcard');
+            
+            // Animation handling
+            if (animationDir === 'left') {
+                card.classList.add('swipe-left-out');
+            } else if (animationDir === 'right') {
+                card.classList.add('swipe-right-out');
+            }
+
+            setTimeout(() => {
+                document.getElementById('topic-title').innerText = topic.title;
+                
+                let contentHtml = '';
+                if(topic.content) {
+                    topic.content.forEach(block => {
+                        // Clean up OCR HTML and apply our custom highlights
+                        let rawText = block.html.replace(/<[^>]*>?/gm, ''); 
+                        let highlightedText = autoHighlight(rawText);
+                        
+                        if (block.type === 'bullet') {
+                            contentHtml += `<div class="content-bullet">${highlightedText}</div>`;
+                        } else {
+                            contentHtml += `<div class="content-line">${highlightedText}</div>`;
+                        }
+                    });
+                }
+                document.getElementById('topic-content').innerHTML = contentHtml;
+                document.getElementById('progress-indicator').innerText = `Ch ${cIdx + 1} | Topic ${tIdx + 1} of ${auditData[cIdx].topics.length}`;
+                
+                updateNavHighlight();
+
+                // Reset animation classes
+                card.className = '';
+                void card.offsetWidth; // Trigger reflow
+                if (animationDir === 'left') card.classList.add('swipe-left-in');
+                if (animationDir === 'right') card.classList.add('swipe-right-in');
+                
+            }, animationDir === 'none' ? 0 : 300);
+        }
+
+        // 4. Navigation Logic
+        function nextTopic() {
+            if (currentTopicIdx < auditData[currentChapIdx].topics.length - 1) {
+                loadTopic(currentChapIdx, currentTopicIdx + 1, 'left');
+            } else if (currentChapIdx < auditData.length - 1) {
+                loadTopic(currentChapIdx + 1, 0, 'left');
+            }
+        }
+
+        function prevTopic() {
+            if (currentTopicIdx > 0) {
+                loadTopic(currentChapIdx, currentTopicIdx - 1, 'right');
+            } else if (currentChapIdx > 0) {
+                let prevChapTopics = auditData[currentChapIdx - 1].topics.length;
+                loadTopic(currentChapIdx - 1, prevChapTopics - 1, 'right');
+            }
+        }
+
+        // 5. Sidebar Builders
+        function buildNavigation() {
+            let navHtml = '';
+            auditData.forEach((chap, cIdx) => {
+                navHtml += `<div class="nav-chapter">${chap.title}</div>`;
+                chap.topics.forEach((topic, tIdx) => {
+                    navHtml += `<div class="nav-topic" id="nav-${cIdx}-${tIdx}" onclick="selectFromNav(${cIdx}, ${tIdx})">${topic.title}</div>`;
+                });
+            });
+            document.getElementById('nav-content').innerHTML = navHtml;
+        }
+
+        function selectFromNav(cIdx, tIdx) {
+            let dir = 'none';
+            if(cIdx > currentChapIdx || (cIdx === currentChapIdx && tIdx > currentTopicIdx)) dir = 'left';
+            if(cIdx < currentChapIdx || (cIdx === currentChapIdx && tIdx < currentTopicIdx)) dir = 'right';
+            
+            loadTopic(cIdx, tIdx, dir);
+            toggleMenu();
+        }
+
+        function updateNavHighlight() {
+            document.querySelectorAll('.nav-topic').forEach(el => el.classList.remove('active'));
+            const activeEl = document.getElementById(`nav-${currentChapIdx}-${currentTopicIdx}`);
+            if(activeEl) {
+                activeEl.classList.add('active');
+                activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function toggleMenu() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            if (sidebar.classList.contains('open')) {
+                sidebar.classList.remove('open');
+                overlay.style.display = 'none';
+            } else {
+                sidebar.classList.add('open');
+                overlay.style.display = 'block';
+            }
+        }
+
+        // 6. Swipe Gesture Handling (Crucial for Mobile)
+        let touchstartX = 0;
+        let touchendX = 0;
+        const swipeZone = document.getElementById('swipe-zone');
+
+        swipeZone.addEventListener('touchstart', e => {
+            touchstartX = e.changedTouches[0].screenX;
+        }, {passive: true});
+
+        swipeZone.addEventListener('touchend', e => {
+            touchendX = e.changedTouches[0].screenX;
+            handleSwipe();
+        }, {passive: true});
+
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            if (touchstartX - touchendX > swipeThreshold) nextTopic(); // Swipe left
+            if (touchendX - touchstartX > swipeThreshold) prevTopic(); // Swipe right
+        }
+
+        // Initialization
+        loadData();
+    </script>
+</body>
+</html>
